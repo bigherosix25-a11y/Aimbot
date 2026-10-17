@@ -1,0 +1,149 @@
+
+-- Targeted Aim Assist
+-- Place in StarterPlayer > StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- CONFIGURATION
+local TARGET_USERNAME = "puggdghd"
+local AIM_SMOOTHNESS = 0.18
+local SCAN_INTERVAL = 0.2
+
+local AimEnabled = false
+local TargetPart = nil
+local ScanTimer = 0
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TargetAimGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local Frame = Instance.new("Frame")
+Frame.Name = "MainPanel"
+Frame.Size = UDim2.fromOffset(245, 110)
+Frame.Position = UDim2.new(0, 20, 0.5, -55)
+Frame.BackgroundColor3 = Color3.fromRGB(27, 30, 40)
+Frame.BorderSizePixel = 0
+Frame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 10)
+Corner.Parent = Frame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 36)
+Title.BackgroundTransparency = 1
+Title.Text = "TARGET: " .. TARGET_USERNAME
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 15
+Title.Parent = Frame
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Position = UDim2.fromOffset(10, 45)
+ToggleButton.Size = UDim2.new(1, -20, 0, 45)
+ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 14
+ToggleButton.Parent = Frame
+
+local function UpdateButton()
+    ToggleButton.Text = AimEnabled
+        and "AIM ASSIST: ON"
+        or "AIM ASSIST: OFF"
+
+    ToggleButton.BackgroundColor3 = AimEnabled
+        and Color3.fromRGB(40, 150, 85)
+        or Color3.fromRGB(170, 60, 60)
+end
+
+ToggleButton.Activated:Connect(function()
+    AimEnabled = not AimEnabled
+    TargetPart = nil
+    UpdateButton()
+end)
+
+-- Find the specified player in this server.
+local function FindTarget()
+    local TargetPlayer
+
+    for _, OtherPlayer in ipairs(Players:GetPlayers()) do
+        if OtherPlayer.Name:lower() == TARGET_USERNAME:lower() then
+            TargetPlayer = OtherPlayer
+            break
+        end
+    end
+
+    if not TargetPlayer or not TargetPlayer.Character then
+        return nil
+    end
+
+    local Character = TargetPlayer.Character
+    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+    local Part = Character:FindFirstChild("Head")
+        or Character:FindFirstChild("HumanoidRootPart")
+
+    if not Humanoid or Humanoid.Health <= 0 or not Part then
+        return nil
+    end
+
+    return Part
+end
+
+-- Update aim assist.
+RunService:BindToRenderStep(
+    "TargetAimAssist",
+    Enum.RenderPriority.Camera.Value + 1,
+    function(DeltaTime)
+        if not AimEnabled then
+            return
+        end
+
+        ScanTimer += DeltaTime
+
+        if ScanTimer >= SCAN_INTERVAL then
+            ScanTimer = 0
+            TargetPart = FindTarget()
+        end
+
+        if not TargetPart or not TargetPart.Parent then
+            TargetPart = nil
+            return
+        end
+
+        local Humanoid =
+            TargetPart.Parent:FindFirstChildOfClass("Humanoid")
+
+        local Camera = Workspace.CurrentCamera
+
+        if not Humanoid or Humanoid.Health <= 0 or not Camera then
+            TargetPart = nil
+            return
+        end
+
+        local DesiredCFrame = CFrame.lookAt(
+            Camera.CFrame.Position,
+            TargetPart.Position
+        )
+
+        local Alpha = 1 - math.pow(
+            1 - math.clamp(AIM_SMOOTHNESS, 0, 1),
+            DeltaTime * 60
+        )
+
+        Camera.CFrame = Camera.CFrame:Lerp(DesiredCFrame, Alpha)
+    end
+)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    TargetPart = nil
+end)
+
+UpdateButton()
+
+print("Target Aim Assist loaded for:", TARGET_USERNAME)
